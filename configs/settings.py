@@ -24,13 +24,29 @@ class Settings:
     LOG_LEVEL = "INFO"
     
     #Trends Display in Logs
-    TOP_TRENDS_LIMIT = 5
+    TOP_TRENDS_LIMIT = 25
 
     #Select your niche
     NICHE_KEYWORDS = [
     "ai", "machine", "learning", "data", "robot",
     "technology", "software", "nvidia", "openai"
     ]
+    
+    #API key
+    import os
+
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+    GEMINI_MODEL = "gemini-2.5-flash"
+
+    #User Profile
+    USER_PROFILE = {
+    "niche": "AI engineering",
+    "audience": "developers building AI systems",
+    "goal": "build authority and trust",
+    "content_style": "insightful, technical, non-controversial",
+    "avoid": ["politics", "religion", "clickbait"],
+    "tone": "professional, clear, educational"
+}
 
 
 # Create a global settings object
