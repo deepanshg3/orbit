@@ -25,6 +25,9 @@ class Settings:
     
     #Trends Display in Logs
     TOP_TRENDS_LIMIT = 25
+ 
+    #Max LLM retries
+    MAX_LLM_RETRIES=3
 
     #Select your niche
     NICHE_KEYWORDS = [
