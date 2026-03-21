@@ -3,7 +3,9 @@ from configs.settings import settings
 from core.trend_engine.trend_collector import TrendCollector
 from core.trend_engine.trend_processor import TrendProcessor
 from core.trend_engine.llm_ranker import LLMRanker
+import time
 
+start_time = time.time()
 
 def main():
 
@@ -58,6 +60,10 @@ def main():
         main_logger.info(item.reason)
         main_logger.info("-" * 50)
 
+    total_time = time.time() - start_time
+    main_logger.info(f"[PIPELINE] Total execution time: {total_time:.2f}s")
+
 
 if __name__ == "__main__":
     main()
+    
