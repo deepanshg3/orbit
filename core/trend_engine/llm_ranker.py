@@ -48,6 +48,7 @@ class LLMRanker:
 
                     2. Scoring rules:
                     - Use full range (1–10)
+                    - Make sure scores are unique,score them in decimal between 1-10 like 9.8, 9.4, 7.9 
                     - Scores must be relative
                     - Lower ID = higher virality (use as signal, not rule)
                     - Clearly differentiate top vs average vs weak
@@ -106,10 +107,17 @@ class LLMRanker:
 
                 raw_output = response.text
 
-                if hasattr(response, "usage_metadata") and response.usage_metadata:
-                    tokens = getattr(response.usage_metadata, "total_token_count", None)
-                    if tokens:
-                        self.logger.info(f"[LLM] Tokens used: {tokens}")
+                # Token Sizes
+                usage = getattr(response, "usage_metadata", None)
+                
+                if usage:
+                    input_tokens = getattr(usage, "prompt_token_count", 0)
+                    output_tokens = getattr(usage, "candidates_token_count", 0)
+                    total_tokens = getattr(usage, "total_token_count", 0)
+                
+                    self.logger.info(f"[LLM] Prompt Tokens: {input_tokens}")
+                    self.logger.info(f"[LLM] Completion Tokens: {output_tokens}")
+                    self.logger.info(f"[LLM] Total Tokens: {total_tokens}")
 
                 self.logger.debug(f"[LLM] Raw response length: {len(raw_output)} chars")
 

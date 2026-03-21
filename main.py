@@ -3,11 +3,14 @@ from configs.settings import settings
 from core.trend_engine.trend_collector import TrendCollector
 from core.trend_engine.trend_processor import TrendProcessor
 from core.trend_engine.llm_ranker import LLMRanker
+from core.content_engine.content_generator import ContentGenerator
 import time
 
-start_time = time.time()
+
 
 def main():
+
+    start_time = time.time()
 
     # Main logger
     main_logger = get_logger("orbit.main")
@@ -29,6 +32,10 @@ def main():
         logger=get_logger("orbit.llm_ranker")
     )
 
+    content_engine = ContentGenerator(
+        logger=get_logger("orbit.content_generator")
+    )
+    
     # Fetch trends
     trends = collector.fetch_trends()
 
@@ -60,6 +67,20 @@ def main():
         main_logger.info(item.reason)
         main_logger.info("-" * 50)
 
+    
+    #generate content
+    best_trend = ranked_output[0]   # for now pick top 1
+
+    generated = content_engine.generate(best_trend)
+
+    if generated:
+        main_logger.info("Generated Content:")
+        main_logger.info(f"Angle: {generated.angle}")
+        main_logger.info(f"Hook: {generated.hook}")
+        main_logger.info(f"Content: {generated.content}")
+        main_logger.info(f"Takeaway: {generated.takeaway}")
+    
+    #total time
     total_time = time.time() - start_time
     main_logger.info(f"[PIPELINE] Total execution time: {total_time:.2f}s")
 
