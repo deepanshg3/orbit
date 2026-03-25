@@ -4,6 +4,7 @@ from core.trend_engine.trend_collector import TrendCollector
 from core.trend_engine.trend_processor import TrendProcessor
 from core.trend_engine.llm_ranker import LLMRanker
 from core.content_engine.content_generator import ContentGenerator
+from platforms.threads.publisher import ThreadsPublisher
 import time
 
 
@@ -71,7 +72,7 @@ def main():
     #generate content
     best_trend = ranked_output[0]   # for now pick top 1
 
-    generated = content_engine.generate(best_trend)
+    generated = content_engine.generate(best_trend, best_trend.content_type)
 
     if generated:
         main_logger.info("Generated Content:")
@@ -79,6 +80,17 @@ def main():
         main_logger.info(f"Hook: {generated.hook}")
         main_logger.info(f"Content: {generated.content}")
         main_logger.info(f"Takeaway: {generated.takeaway}")
+
+    #---------------------THREADS----------------------------
+    publisher = ThreadsPublisher()
+
+    if not generated:
+        main_logger.error("[PIPELINE] Content generation failed. Skipping publish.")
+        return
+
+    post_ids = publisher.publish_thread(generated)
+
+    main_logger.info(f"[THREADS] Thread Post IDs: {post_ids}") 
     
     #total time
     total_time = time.time() - start_time

@@ -46,14 +46,26 @@ class LLMRanker:
                     - engagement potential
                     - usefulness
 
-                    2. Scoring rules:
+                    2. ALSO decide content_type for each trend, decide based upon how much attention it needs:
+
+                    Choose ONE:
+                    - "short" → for quick news, announcements, simple ideas (under 200 chars)
+                    - "medium" → for moderate insights (under 400 chars)
+                    - "thread" → for deep insights, technical topics, case studies (multi-post)
+
+                    Guidelines:
+                    - Complex / high-value insights → thread
+                    - Breaking news / simple updates → short
+                    - Balanced topics → medium
+
+                    3. Scoring rules:
                     - Use full range (1–10)
                     - Make sure scores are unique,score them in decimal between 1-10 like 9.8, 9.4, 7.9 
                     - Scores must be relative
                     - Lower ID = higher virality (use as signal, not rule)
                     - Clearly differentiate top vs average vs weak
 
-                    3. Select TOP 5 after scoring
+                    4. Select TOP 5 after scoring
 
                     OUTPUT:
                     Return ONLY TOP 5 items.
@@ -63,6 +75,7 @@ class LLMRanker:
                         "id": number,
                         "title": "exact title",
                         "score": number,
+                        "content_type": "short | medium | thread",
                         "reason": "short explanation"
                     }}
                     ]
@@ -139,7 +152,7 @@ class LLMRanker:
                 for item in parsed_output:
 
                     # Field validation
-                    if not all(k in item for k in ["id", "title", "score", "reason"]):
+                    if not all(k in item for k in ["id", "title", "score", "reason", "content_type"]):
                         raise ValueError("Missing required fields")
 
                     # ID validation

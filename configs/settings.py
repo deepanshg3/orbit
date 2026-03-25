@@ -1,3 +1,6 @@
+import os
+
+
 """
 Orbit configuration settings.
 
@@ -17,9 +20,6 @@ class Settings:
     # Posting configuration
     POSTS_PER_DAY = 2
 
-    # AI model configuration
-    MODEL_NAME = "gpt-4"
-
     # Logging configuration
     LOG_LEVEL = "INFO"
     
@@ -36,10 +36,12 @@ class Settings:
     ]
     
     #API key
-    import os
-
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
     GEMINI_MODEL = "gemini-2.5-flash"
+
+    # Threads
+    THREADS_ACCESS_TOKEN = os.getenv("THREADS_ACCESS_TOKEN")
+    THREADS_APP_SECRET = os.getenv("THREADS_APP_SECRET")
 
     #User Profile
     USER_PROFILE = {

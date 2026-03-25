@@ -23,11 +23,9 @@ class TrendCollector:
         }
 
         try:
-            response = requests.get(self.api_url, headers=headers)
+            response = requests.get(self.api_url, headers=headers, timeout=10)
 
-            if response.status_code != 200:
-                self.logger.error(f"Failed to fetch data: {response.status_code}")
-                return []
+            response.raise_for_status()
 
             data = response.json()
 
@@ -37,15 +35,18 @@ class TrendCollector:
 
             for post in posts:
                 title = post["data"]["title"]
-
-                trends.append({
-                    "title": title
-                })
+                trends.append({"title": title})
 
             self.logger.info(f"Fetched {len(trends)} trends")
-
             return trends
 
+        except requests.exceptions.Timeout:
+            self.logger.error("Request to Reddit timed out")
+
+        except requests.exceptions.RequestException as e:
+            self.logger.error(f"Request failed: {str(e)}")
+
         except Exception as e:
-            self.logger.error(f"Error fetching trends: {str(e)}")
-            return []
+            self.logger.error(f"Unexpected error: {str(e)}")
+
+        return []
