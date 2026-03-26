@@ -5,6 +5,7 @@ from core.trend_engine.trend_processor import TrendProcessor
 from core.trend_engine.llm_ranker import LLMRanker
 from core.content_engine.content_generator import ContentGenerator
 from platforms.threads.publisher import ThreadsPublisher
+from core.analytics_engine.storage import Storage
 import time
 
 
@@ -92,6 +93,14 @@ def main():
 
     main_logger.info(f"[THREADS] Thread Post IDs: {post_ids}") 
     
+    #--------------------FEEDBACK_ENGINE-------------------------
+    
+
+    storage = Storage(logger=get_logger("orbit.storage"))
+
+    # Save post after publishing
+    post_db_id = storage.save_post(generated, post_ids, best_trend)
+
     #total time
     total_time = time.time() - start_time
     main_logger.info(f"[PIPELINE] Total execution time: {total_time:.2f}s")

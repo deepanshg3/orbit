@@ -1,6 +1,5 @@
 import os
 
-
 """
 Orbit configuration settings.
 
@@ -42,6 +41,10 @@ class Settings:
     # Threads
     THREADS_ACCESS_TOKEN = os.getenv("THREADS_ACCESS_TOKEN")
     THREADS_APP_SECRET = os.getenv("THREADS_APP_SECRET")
+
+    #SupaBase
+    SUPABASE_URL = os.getenv("SUPABASE_URL")
+    SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
     #User Profile
     USER_PROFILE = {
