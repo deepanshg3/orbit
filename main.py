@@ -23,7 +23,7 @@ def main():
     collector = TrendCollector(
         logger=get_logger("orbit.trend_collector"),
         api_url=settings.REDDIT_API_URL,
-        user_agent=settings.USER_AGENT
+        user_agent=settings.REDDIT_USER_AGENT
     )
 
     processor = TrendProcessor(

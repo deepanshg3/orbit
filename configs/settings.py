@@ -13,8 +13,9 @@ class Settings:
     VERSION = "0.1.0"
 
     # Reddit API configuration
+    user_agent = os.getenv("REDDIT_USER_AGENT")
     REDDIT_API_URL = "https://www.reddit.com/r/technology/top.json"
-    USER_AGENT = "orbit-app"
+    REDDIT_USER_AGENT = user_agent
 
     # Posting configuration
     POSTS_PER_DAY = 2

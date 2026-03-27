@@ -32,4 +32,5 @@ jobs:
           THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          REDDIT_USER_AGENT: ${{ secrets.REDDIT_USER_AGENT }} 
         run: python main.py
