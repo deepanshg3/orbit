@@ -17,6 +17,10 @@ class Settings:
     REDDIT_API_URL = "https://www.reddit.com/r/technology/top.json"
     REDDIT_USER_AGENT = user_agent
 
+    #Hacker News API configuration
+    HN_API_URL = "https://hn.algolia.com/api/v1/search?tags=front_page"
+    HN_USER_AGENT = user_agent
+
     # Posting configuration
     POSTS_PER_DAY = 2
 
@@ -24,7 +28,7 @@ class Settings:
     LOG_LEVEL = "INFO"
     
     #Trends Display in Logs
-    TOP_TRENDS_LIMIT = 25
+    TOP_TRENDS_LIMIT = 20
  
     #Max LLM retries
     MAX_LLM_RETRIES=3

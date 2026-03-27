@@ -3,7 +3,7 @@ import time
 
 class TrendCollector:
     """
-    Collects trending data from external sources (Reddit for now).
+    Collects trending data from Hacker News (Algolia API).
     """
 
     def __init__(self, logger, api_url, user_agent):
@@ -13,45 +13,42 @@ class TrendCollector:
 
     def fetch_trends(self):
         """
-        Fetch trending posts from Reddit with automatic retries.
+        Fetch trending posts from Hacker News.
         """
-        # --- DEBUG LOG ---
-        self.logger.info(f"Using REDDIT_USER_AGENT: '{self.user_agent}'")
-        # ------------------
+        self.logger.info("Fetching real-time tech buzz from Hacker News...")
 
-        headers = {
-            "User-Agent": self.user_agent
-        }
-
+        # Algolia API doesn't strictly require User-Agent, but it's good practice
+        headers = {"User-Agent": self.user_agent}
         max_retries = 3
         
         for attempt in range(max_retries):
             try:
                 response = requests.get(self.api_url, headers=headers, timeout=10)
                 
-                # We now include 403 in the retry list to see if a second try works
-                if response.status_code in [403, 429, 503]:
-                    self.logger.warning(
-                        f"Reddit blocked or busy (Error {response.status_code}). "
-                        f"Retrying in 5 seconds... (Attempt {attempt + 1}/{max_retries})"
-                    )
+                # Hacker News is very stable, but we check for standard server errors
+                if response.status_code in [429, 503]:
+                    self.logger.warning(f"Server busy. Retrying... ({attempt + 1}/{max_retries})")
                     time.sleep(5)
                     continue 
                 
                 response.raise_for_status()
-
                 data = response.json()
-                posts = data["data"]["children"]
-                trends = [{"title": post["data"]["title"]} for post in posts]
 
-                self.logger.info(f"Fetched {len(trends)} trends")
+                # CHANGE HERE: Hacker News returns a list called 'hits'
+                posts = data.get("hits", [])
+                
+                trends = []
+                for post in posts:
+                    # CHANGE HERE: Hacker News uses the key 'title' inside each hit
+                    title = post.get("title")
+                    if title:
+                        trends.append({"title": title})
+
+                self.logger.info(f"Fetched {len(trends)} trends from Hacker News")
                 return trends
 
-            except requests.exceptions.RequestException as e:
-                self.logger.error(f"Request attempt {attempt + 1} failed: {str(e)}")
-                if attempt < max_retries - 1:
-                    time.sleep(5)
-                else:
-                    break
+            except Exception as e:
+                self.logger.error(f"Attempt {attempt + 1} failed: {str(e)}")
+                time.sleep(2)
         
         return []

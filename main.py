@@ -23,8 +23,8 @@ def main():
     # Dependency Injection with module-specific loggers
     collector = TrendCollector(
         logger=get_logger("orbit.trend_collector"),
-        api_url=settings.REDDIT_API_URL,
-        user_agent=settings.REDDIT_USER_AGENT
+        api_url=settings.HN_API_URL,
+        user_agent=settings.HN_USER_AGENT
     )
 
     processor = TrendProcessor(
@@ -40,19 +40,22 @@ def main():
     )
     
     # Fetch trends
+    # 1. Fetch trends (Hacker News gives you 20 by default)
     trends = collector.fetch_trends()
 
     if not trends:
         main_logger.error("CRITICAL: No trends were fetched. Exiting pipeline immediately.")
         sys.exit(1)
 
-    main_logger.info("Top Trends:")
+    # 2. Slice them HERE so everything following only sees 20 items
+    limited_trends = trends[:settings.TOP_TRENDS_LIMIT]
 
-    for i, trend in enumerate(trends[:settings.TOP_TRENDS_LIMIT], start=1):
+    main_logger.info(f"Displaying top {len(limited_trends)} trends:")
+    for i, trend in enumerate(limited_trends, start=1):
         main_logger.info(f"{i}. {trend['title']}")
 
-    # Process trends
-    processed_trends = processor.process(trends)
+    # 3. Process ONLY the limited list
+    processed_trends = processor.process(limited_trends)
 
     main_logger.info("Processed Trends:")
 
