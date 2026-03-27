@@ -8,6 +8,10 @@ on:
     - cron: '30 13 * * *'
   workflow_dispatch: # Allows you to run it manually from the GitHub UI
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+
 jobs:
   run-orbit:
     runs-on: ubuntu-latest

@@ -7,6 +7,7 @@ from core.content_engine.content_generator import ContentGenerator
 from platforms.threads.publisher import ThreadsPublisher
 from core.analytics_engine.storage import Storage
 import time
+import sys
 
 
 
@@ -40,6 +41,10 @@ def main():
     
     # Fetch trends
     trends = collector.fetch_trends()
+
+    if not trends:
+        main_logger.error("CRITICAL: No trends were fetched. Exiting pipeline immediately.")
+        sys.exit(1)
 
     main_logger.info("Top Trends:")
 
