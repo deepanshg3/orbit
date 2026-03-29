@@ -51,6 +51,36 @@ class Settings:
     SUPABASE_URL = os.getenv("SUPABASE_URL")
     SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
+    # -------------------------------
+    # INTERACTION ENGINE SETTINGS
+    # -------------------------------
+
+    INTERACTION_KEYWORDS = [
+        "AI", "LLM", "AI agents", "machine learning",
+        "OpenAI", "GPU", "Anthropic", "Claude", "Gemini"
+    ]
+
+    MAX_REPLIES_PER_RUN = 1
+    MAX_POSTS_FETCH = 25
+    MIN_POST_LENGTH = 30
+
+    # -------------------------------
+    # RESPONSE SETTINGS
+    # -------------------------------
+
+    REPLY_TONE = "expert, thoughtful, slightly contrarian"
+    REPLY_STYLE = "concise, insight-driven"
+    MAX_REPLY_LENGTH = 400   # ✅ renamed
+
+    ENABLE_REASON_IN_REPLY = True
+
+    # -------------------------------
+    # SAFETY
+    # -------------------------------
+
+    ENABLE_INTERACTIONS = True
+
+
     #User Profile
     USER_PROFILE = {
     "niche": "AI engineering",
