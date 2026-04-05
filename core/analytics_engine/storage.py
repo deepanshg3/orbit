@@ -58,6 +58,7 @@ class Storage:
                 "fetched_at": datetime.now(timezone.utc).isoformat(),
                 "likes": metrics.get("likes", 0),
                 "replies": metrics.get("replies", 0),
+                "views": metrics.get("views", 0), 
                 "reposts": metrics.get("reposts", 0),
                 "time_since_post_hr": time_since_post_hr
             }

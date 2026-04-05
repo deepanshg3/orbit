@@ -7,7 +7,6 @@ from dateutil import parser
 
 logger = get_logger("orbit.fetch_metrics")
 
-
 class MetricsFetcher:
 
     def __init__(self):
@@ -54,7 +53,12 @@ class MetricsFetcher:
         now = datetime.now(timezone.utc)
         age = (now - post_time).total_seconds() / 3600
 
-        return age >= target_hours, age
+        # GRACE PERIOD LOGIC:
+        # It must be older than target_hours, BUT no older than target_hours + 4
+        # E.g., for the 2h bucket, age must be strictly between 2.0 and 6.0 hours.
+        is_valid_window = (target_hours <= age <= target_hours + 4)
+
+        return is_valid_window, age
 
     def run(self):
         logger.info("[FETCHER] Checking metrics...")

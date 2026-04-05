@@ -35,8 +35,8 @@ class InteractionFetcher:
                 posts = response.get("data", [])[:5]
 
                 # 🛑 ADD THIS TEMPORARY DEBUG LINE:
-                if posts:
-                    self.logger.info(f"[FETCHER] RAW API DATA: {posts[0]}")
+                # if posts:
+                #     self.logger.info(f"[FETCHER] RAW API DATA: {posts[0]}")
 
                 for post in posts:
                     post_id = post.get("id")
