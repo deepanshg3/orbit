@@ -4,7 +4,7 @@ from core.utils.schema import GeneratedContent
 import json
 import re
 import time
-
+import random
 
 class ContentGenerator:
 
@@ -204,11 +204,29 @@ STRICT JSON ONLY
                 return validated
 
             except Exception as e:
-                self.logger.warning(
-                    f"[CONTENT ERROR] Attempt {attempt+1} failed: {str(e)}"
-                )
-
-        self.logger.error("[CONTENT ERROR] All attempts failed")
-        return None
+                error_msg = str(e)
+                
+                # 1. Check if it's the specific Gemini 503 Overload Error
+                if "503" in error_msg or "high demand" in error_msg.lower():
+                    if attempt == max_retries - 1:
+                        self.logger.error(f"[CONTENT ERROR] All attempts failed. Server overloaded: {error_msg}")
+                        return None
+                    
+                    # Calculate exponential backoff: 5s, 10s, 20s + jitter
+                    base_delay = 5
+                    sleep_time = (base_delay * (2 ** attempt)) + random.uniform(0, 2)
+                    
+                    self.logger.warning(f"[CONTENT WARNING] 503 Overload. Waiting {sleep_time:.1f}s before attempt {attempt + 2}...")
+                    time.sleep(sleep_time)
+                
+                # 2. If it's a different error (like a JSON formatting glitch), do a standard retry
+                else:
+                    self.logger.warning(f"[CONTENT ERROR] Attempt {attempt+1} failed: {error_msg}")
+                    
+                    if attempt == max_retries - 1:
+                        self.logger.error("[CONTENT ERROR] All normal attempts failed.")
+                        return None
+                    
+                    time.sleep(2) # Short 2-second breather for standard errors
 
         
