@@ -84,10 +84,14 @@ class ImpactCalculator:
                 self.logger.info("[CALCULATOR] No orphaned posts found. Database is clean.")
                 return
 
-            self.logger.info(f"[CALCULATOR] Found {len(orphans)} orphaned posts. Initiating emergency grading...")
+            total_orphans = len(orphans)
+            self.logger.info(f"[CALCULATOR] Found {total_orphans} orphaned posts. Initiating emergency grading...")
             
             for post in orphans:
                 self.calculate_and_save(post["id"])
+            
+            # --- THE UPGRADE: The Final Summary Log ---
+            self.logger.info(f"[CALCULATOR] Sweep complete. Successfully processed {total_orphans} posts.")
 
         except Exception as e:
             self.logger.error(f"[CALCULATOR] Orphan sweep failed: {str(e)}")
