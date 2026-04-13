@@ -5,6 +5,9 @@ from core.analytics_engine.storage import Storage
 from core.analytics_engine.tracker import ThreadsTracker
 from dateutil import parser  
 
+# NEW: Import the Calculator we are about to build
+from core.analytics_engine.calculator import ImpactCalculator
+
 logger = get_logger("orbit.fetch_metrics")
 
 class MetricsFetcher:
@@ -43,19 +46,14 @@ class MetricsFetcher:
         return existing
 
     def is_eligible(self, created_at, target_hours):
-        # This parser is much "smarter" than the built-in one
         post_time = parser.isoparse(created_at)
         
-        # Ensure it's UTC-aware to match our 'now' variable
         if post_time.tzinfo is None:
             post_time = post_time.replace(tzinfo=timezone.utc)
             
         now = datetime.now(timezone.utc)
         age = (now - post_time).total_seconds() / 3600
 
-        # GRACE PERIOD LOGIC:
-        # It must be older than target_hours, BUT no older than target_hours + 4
-        # E.g., for the 2h bucket, age must be strictly between 2.0 and 6.0 hours.
         is_valid_window = (target_hours <= age <= target_hours + 4)
 
         return is_valid_window, age
@@ -70,7 +68,6 @@ class MetricsFetcher:
             return
 
         post_ids_db = [p["id"] for p in posts]
-
         existing_metrics = self.get_existing_metrics(post_ids_db)
 
         batch_2h, batch_1d, batch_3d = [], [], []
@@ -119,6 +116,15 @@ class MetricsFetcher:
                     metrics=metrics,
                     time_since_post_hr=age
                 )
+
+                # ==========================================
+                # NEW EVENT TRIGGER: The 72h Maturity Check
+                # ==========================================
+                if bucket == "3d":
+                    logger.info(f"[FETCHER] Post {db_id} reached 3d maturity. Triggering Impact Calculator.")
+                    
+                    calculator = ImpactCalculator(logger, self.storage.client)
+                    calculator.calculate_and_save(db_id)
 
                 time.sleep(2)
 
