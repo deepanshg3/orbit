@@ -1,0 +1,37 @@
+name: Weekly Strategy Engine (Sunday Playbook)
+
+on:
+  # 1. The Cron Job: Runs at 23:00 UTC every Sunday
+  schedule:
+    - cron: '0 23 * * 0'
+    
+  # 2. Manual Override: Adds a button in GitHub so you can force-run it anytime
+  workflow_dispatch: 
+
+jobs:
+  generate-playbook:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11' # Matches a modern Python environment
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Execute Sunday Strategy Pipeline
+        env:
+          # Injecting your secure secrets into the cloud environment
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          # Running as a module, exactly as we tested!
+          python -m core.strategy_engine.run_strategy
