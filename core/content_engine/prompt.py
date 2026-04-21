@@ -3,9 +3,9 @@ from core.utils.logger import get_logger
 # Initialize a specific logger for this prompt builder
 logger = get_logger("orbit.content_prompts")
 
-def build_content_prompt(trend_title: str, trend_reason: str, content_type: str, playbook: dict = None) -> str:
+def build_content_system_prompt(playbook: dict = None) -> str:
     """
-    Builds the prompt for the Content Generator. 
+    Builds the God-Mode system instructions for the Content Generator.
     Dynamically injects the Weekly Strategy Playbook if one is provided.
     """
     # 1. Format the dynamic playbook lists into clean bullet points
@@ -23,26 +23,12 @@ def build_content_prompt(trend_title: str, trend_reason: str, content_type: str,
         winning_hooks = "\n- Start with a scroll-stopping opening line."
         optimal_length = "Keep it concise but dense."
 
-    # 2. Return the master prompt string
+    # 2. Return the master system prompt
     return f"""
 You are an expert AI content strategist and engineer.
 Your job is to convert a trending topic into a HIGH-VALUE technical content piece.
 
---------------------------------------------------
-INPUT:
-
-Title:
-{trend_title}
-
-Context:
-{trend_reason}
-
-Content Type:
-{content_type}
-
---------------------------------------------------
-🎯 CURRENT AUDIENCE PLAYBOOK (MANDATORY RULES)
-
+=== CURRENT AUDIENCE PLAYBOOK (MANDATORY RULES) ===
 Our analytics engine mathematically analyzed last week's best-performing posts. 
 You MUST adhere to these psychological and structural constraints:
 
@@ -59,19 +45,17 @@ You MUST adhere to these psychological and structural constraints:
 {optimal_length}
 (Note: You must still strictly respect the hard character limits in the FORMAT RULES below).
 
---------------------------------------------------
-FORMAT RULES (VERY IMPORTANT):
-
-IF content_type = "short":
+=== FORMAT RULES (VERY IMPORTANT) ===
+IF the requested Content Type = "short":
 - Write ONLY 2–3 lines
 - Max 250 characters strictly
 - No explanation, only punchy insight
 
-IF content_type = "medium":
+IF the requested Content Type = "medium":
 - Write a SINGLE post under 450 characters strictly
 - Include insight but keep concise
 
-IF content_type = "thread":
+IF the requested Content Type = "thread":
 - Write structured multi-part content
 - Include breakdown, insights, and depth
 - Each part (chunk) must be strictly under 450 char
@@ -81,25 +65,32 @@ IMPORTANT:
 - Return clean content only in chunks
 - Numbering will be handled by the system
 
---------------------------------------------------
-CONTENT REQUIREMENTS:
+=== CONTENT REQUIREMENTS ===
 - Sound like an expert, not a journalist
 - Extract a UNIQUE angle
 - Have a human, authoritative tone
 
---------------------------------------------------
-STRUCTURE:
-
-Return JSON with:
-
+=== OUTPUT SCHEMA ===
+Return ONLY a valid JSON object matching this exact structure:
 {{
   "angle": "unique perspective in one line",
   "hook": "scroll-stopping opening line",
-  "content": "main content (clear, structured, insightful)",
+  "content": "main content (clear, structured, insightful). If thread, make this an array of strings.",
   "takeaway": "practical lesson or conclusion"
 }}
+"""
 
---------------------------------------------------
-OUTPUT:
-STRICT JSON ONLY
+def build_content_user_message(trend_title: str, trend_reason: str, content_type: str) -> str:
+    """
+    Builds the raw data payload for the Content Generator.
+    """
+    return f"""
+Please generate a HIGH-VALUE technical content piece for the following trend.
+
+=== INPUT DATA ===
+Title: {trend_title}
+Context: {trend_reason}
+
+=== TARGET FORMAT ===
+Content Type: {content_type}
 """

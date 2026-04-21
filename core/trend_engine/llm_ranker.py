@@ -1,7 +1,11 @@
 from google import genai
+from google.genai import types  # <-- REQUIRED FOR SYSTEM INSTRUCTIONS & JSON MODE
 from configs.settings import settings
 from core.utils.schema import RankedTrend
-from core.trend_engine.prompt import build_ranker_prompt
+
+# Adjust this import path if your file is in core/trend_engine/prompts.py instead!
+from core.trend_engine.prompt import build_ranker_system_prompt, build_ranker_user_message 
+
 import json
 import re
 import time
@@ -17,6 +21,7 @@ class LLMRanker:
         self.client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
     def extract_json(self, text):
+        # We keep this as a safety net, even though JSON mode usually strips the markdown
         text = re.sub(r"```json|```", "", text).strip()
         match = re.search(r"\[.*\]", text, re.DOTALL)
         if match:
@@ -29,8 +34,9 @@ class LLMRanker:
         """
         self.logger.info("[LLM] Ranking trends using Gemini")
 
-        # Dynamically build the prompt using our external file and settings
-        prompt = build_ranker_prompt(trends, settings.USER_PROFILE, playbook)
+        # 1. Build the two separate pieces dynamically
+        system_instruction = build_ranker_system_prompt(settings.USER_PROFILE, playbook)
+        user_message = build_ranker_user_message(trends)
 
         valid_ids = [t["id"] for t in trends]
         failure_count = 0
@@ -40,9 +46,14 @@ class LLMRanker:
                 self.logger.info(f"[LLM] Attempt {attempt + 1}")
                 start_time = time.time()
 
+                # 2. The Modern SDK Call (Separated System vs Content)
                 response = self.client.models.generate_content(
                     model=settings.GEMINI_MODEL,
-                    contents=prompt
+                    contents=user_message,
+                    config=types.GenerateContentConfig(
+                        system_instruction=system_instruction,
+                        response_mime_type="application/json", # Forces strict JSON
+                    )
                 )
 
                 latency = time.time() - start_time

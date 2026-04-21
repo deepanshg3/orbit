@@ -3,9 +3,12 @@ import re
 import time
 import random
 from google import genai
+from google.genai import types  # <-- REQUIRED FOR SYSTEM INSTRUCTIONS & JSON MODE
 from configs.settings import settings
 from core.utils.schema import GeneratedContent
-from core.content_engine.prompt import build_content_prompt
+
+# Adjust this import path if your file is named prompts.py instead of prompt.py
+from core.content_engine.prompt import build_content_system_prompt, build_content_user_message
 
 class ContentGenerator:
 
@@ -14,6 +17,7 @@ class ContentGenerator:
         self.client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
     def extract_json(self, text):
+        # We keep this as a safety net, even though JSON mode usually strips the markdown
         text = re.sub(r"```json|```", "", text).strip()
         match = re.search(r"\{.*\}", text, re.DOTALL)
         return match.group(0) if match else text
@@ -24,16 +28,22 @@ class ContentGenerator:
         """
         self.logger.info("[CONTENT] Generating content")
 
-        # Dynamically build the prompt using our external file
-        prompt = build_content_prompt(trend.title, trend.reason, content_type, playbook)
+        # 1. Build the two separate pieces dynamically
+        system_instruction = build_content_system_prompt(playbook)
+        user_message = build_content_user_message(trend.title, trend.reason, content_type)
 
         for attempt in range(max_retries):
             try:
                 start_time = time.time()
 
+                # 2. The Modern SDK Call (Separated System vs Content)
                 response = self.client.models.generate_content(
                     model=settings.GEMINI_MODEL,
-                    contents=prompt
+                    contents=user_message,
+                    config=types.GenerateContentConfig(
+                        system_instruction=system_instruction,
+                        response_mime_type="application/json", # Forces strict JSON
+                    )
                 )
                 
                 # Token usage tracking
