@@ -1,6 +1,7 @@
 from google import genai
 from configs.settings import settings
 from core.utils.schema import RankedTrend
+from core.trend_engine.prompt import build_ranker_prompt
 import json
 import re
 import time
@@ -15,99 +16,28 @@ class LLMRanker:
         self.logger = logger
         self.client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
-    def build_prompt(self, trends):
-        profile = settings.USER_PROFILE
-
-        trends_text = "\n".join(
-            [f"{t['id']}. {t['title']}" for t in trends]
-        )
-
-        prompt = f"""
-                    You are a strict ranking system. You must ONLY select from the given trends.
-
-                    USER PROFILE:
-                    - Niche: {profile["niche"]}
-                    - Audience: {profile["audience"]}
-                    - Goal: {profile["goal"]}
-                    - Style: {profile["content_style"]}
-                    - Tone: {profile["tone"]}
-
-                    RULES (MANDATORY):
-                    - Use ONLY given trends
-                    - DO NOT modify titles
-                    - Return EXACT titles
-                    - All IDs must exist in input
-
-                    TASK:
-
-                    1. Score ALL trends (1–10)
-                    Based on:
-                    - relevance
-                    - engagement potential
-                    - usefulness
-
-                    2. ALSO decide content_type for each trend, decide based upon how much attention it needs:
-
-                    Choose ONE:
-                    - "short" → for quick news, announcements, simple ideas (under 200 chars)
-                    - "medium" → for moderate insights (under 400 chars)
-                    - "thread" → for deep insights, technical topics, case studies (multi-post)
-
-                    Guidelines:
-                    - Complex / high-value insights → thread
-                    - Breaking news / simple updates → short
-                    - Balanced topics → medium
-
-                    3. Scoring rules:
-                    - Use full range (1–10)
-                    - Make sure scores are unique,score them in decimal between 1-10 like 9.8, 9.4, 7.9 
-                    - Scores must be relative
-                    - Lower ID = higher virality (use as signal, not rule)
-                    - Clearly differentiate top vs average vs weak
-
-                    4. Select TOP 5 after scoring
-
-                    OUTPUT:
-                    Return ONLY TOP 5 items.
-
-                    [
-                    {{
-                        "id": number,
-                        "title": "exact title",
-                        "score": number,
-                        "content_type": "short | medium | thread",
-                        "reason": "short explanation"
-                    }}
-                    ]
-
-                    TRENDS:
-                    {trends_text}
-                    """
-        return prompt
-
     def extract_json(self, text):
         text = re.sub(r"```json|```", "", text).strip()
-
         match = re.search(r"\[.*\]", text, re.DOTALL)
-
         if match:
             return match.group(0)
-
         return text
 
-    def rank(self, trends, max_retries=3):
+    def rank(self, trends, playbook=None, max_retries=3):
+        """
+        Ranks the trends. Now accepts an optional playbook to drive scoring.
+        """
         self.logger.info("[LLM] Ranking trends using Gemini")
 
-        prompt = self.build_prompt(trends)
+        # Dynamically build the prompt using our external file and settings
+        prompt = build_ranker_prompt(trends, settings.USER_PROFILE, playbook)
 
         valid_ids = [t["id"] for t in trends]
-
         failure_count = 0
 
         for attempt in range(max_retries):
             try:
                 self.logger.info(f"[LLM] Attempt {attempt + 1}")
-
                 start_time = time.time()
 
                 response = self.client.models.generate_content(
@@ -122,7 +52,6 @@ class LLMRanker:
 
                 # Token Sizes
                 usage = getattr(response, "usage_metadata", None)
-                
                 if usage:
                     input_tokens = getattr(usage, "prompt_token_count", 0)
                     output_tokens = getattr(usage, "candidates_token_count", 0)
@@ -135,7 +64,6 @@ class LLMRanker:
                 self.logger.debug(f"[LLM] Raw response length: {len(raw_output)} chars")
 
                 cleaned_output = self.extract_json(raw_output)
-
                 self.logger.debug("[LLM] JSON extracted")
 
                 parsed_output = json.loads(cleaned_output)
@@ -148,9 +76,7 @@ class LLMRanker:
                     raise ValueError("LLM did not return exactly top 5 trends")
 
                 validated_output = []
-
                 for item in parsed_output:
-
                     # Field validation
                     if not all(k in item for k in ["id", "title", "score", "reason", "content_type"]):
                         raise ValueError("Missing required fields")
@@ -163,7 +89,7 @@ class LLMRanker:
                     validated = RankedTrend(**item)
                     validated_output.append(validated)
 
-                self.logger.info(f"[LLM] Success on attempt {attempt + 1}")
+                self.logger.info(f"[LLM] Success on attempt {attempt + 1} (Playbook guided: {bool(playbook)})")
 
                 # Optional: enforce correct ordering if LLM messes up
                 validated_output.sort(key=lambda x: x.score, reverse=True)
@@ -174,27 +100,24 @@ class LLMRanker:
                 failure_count += 1
                 error_msg = str(e)
                 
-                # 1. Check if it's the specific Gemini 503 Overload Error
+                # 503 Overload handling
                 if "503" in error_msg or "high demand" in error_msg.lower():
                     if attempt == max_retries - 1:
                         self.logger.error(f"[LLM ERROR] All attempts failed. Server overloaded: {error_msg} | Total failures: {failure_count}")
                         return None
                     
-                    # Calculate exponential backoff: 5s, 10s, 20s + jitter
                     base_delay = 5
                     sleep_time = (base_delay * (2 ** attempt)) + random.uniform(0, 2)
-                    
                     self.logger.warning(f"[LLM WARNING] 503 Overload. Waiting {sleep_time:.1f}s before attempt {attempt + 2}...")
                     time.sleep(sleep_time)
                 
-                # 2. If it's a different error (like a JSON formatting glitch), do a standard retry
+                # Standard error handling
                 else:
                     self.logger.warning(f"[LLM ERROR] Attempt {attempt+1} failed: {error_msg}")
-                    
                     if attempt == max_retries - 1:
                         self.logger.error(f"[LLM ERROR] All normal attempts failed | Total failures: {failure_count}")
                         return None
                     
-                    time.sleep(2) # Short 2-second breather for standard errors
+                    time.sleep(2)
                     
         return None

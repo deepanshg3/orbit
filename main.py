@@ -6,10 +6,12 @@ from core.trend_engine.llm_ranker import LLMRanker
 from core.content_engine.content_generator import ContentGenerator
 from platforms.threads.publisher import ThreadsPublisher
 from core.analytics_engine.storage import Storage
+
+# --- NEW IMPORT ---
+from core.strategy_engine.reader import PlaybookReader 
+
 import time
 import sys
-
-
 
 def main():
 
@@ -20,7 +22,18 @@ def main():
 
     main_logger.info("Orbit AI Growth Engine starting...")
 
-    # Dependency Injection with module-specific loggers
+    # ---------------------------------------------------------
+    # 0. INITIALIZE STORAGE & FETCH THE BRAIN (STRATEGY PLAYBOOK)
+    # ---------------------------------------------------------
+    # We initialize storage early so we can pass its Supabase client to the Reader
+    storage = Storage(logger=get_logger("orbit.storage"))
+    
+    playbook_reader = PlaybookReader(storage.client)
+    playbook = playbook_reader.get_latest_playbook()
+
+    # ---------------------------------------------------------
+    # 1. DEPENDENCY INJECTION
+    # ---------------------------------------------------------
     collector = TrendCollector(
         logger=get_logger("orbit.trend_collector"),
         api_url=settings.HN_API_URL,
@@ -39,22 +52,23 @@ def main():
         logger=get_logger("orbit.content_generator")
     )
     
-    # Fetch trends
-    # 1. Fetch trends (Hacker News gives you 20 by default)
+    # ---------------------------------------------------------
+    # 2. FETCH & PROCESS TRENDS
+    # ---------------------------------------------------------
     trends = collector.fetch_trends()
 
     if not trends:
         main_logger.error("CRITICAL: No trends were fetched. Exiting pipeline immediately.")
         sys.exit(1)
 
-    # 2. Slice them HERE so everything following only sees 20 items
+    # Slice them HERE so everything following only sees 20 items
     limited_trends = trends[:settings.TOP_TRENDS_LIMIT]
 
     main_logger.info(f"Displaying top {len(limited_trends)} trends:")
     for i, trend in enumerate(limited_trends, start=1):
         main_logger.info(f"{i}. {trend['title']}")
 
-    # 3. Process ONLY the limited list
+    # Process ONLY the limited list
     processed_trends = processor.process(limited_trends)
 
     main_logger.info("Processed Trends:")
@@ -62,8 +76,11 @@ def main():
     for trend in processed_trends[:settings.TOP_TRENDS_LIMIT]:
         main_logger.info(trend["title"])
 
-    # Rank trends
-    ranked_output = ranker.rank(processed_trends)
+    # ---------------------------------------------------------
+    # 3. RANK TRENDS (DYNAMIC STRATEGY INJECTED)
+    # ---------------------------------------------------------
+    # Pass the playbook to guide the ranking math
+    ranked_output = ranker.rank(processed_trends, playbook=playbook)
 
     main_logger.info("Top Ranked Trends:")
 
@@ -78,10 +95,17 @@ def main():
         main_logger.info("-" * 50)
 
     
-    #generate content
+    # ---------------------------------------------------------
+    # 4. GENERATE CONTENT (DYNAMIC STRATEGY INJECTED)
+    # ---------------------------------------------------------
     best_trend = ranked_output[0]   # for now pick top 1
 
-    generated = content_engine.generate(best_trend, best_trend.content_type)
+    # Pass the playbook to constrain the formatting and hooks
+    generated = content_engine.generate(
+        trend=best_trend, 
+        content_type=best_trend.content_type,
+        playbook=playbook
+    )
 
     if generated:
         main_logger.info("Generated Content:")
@@ -90,7 +114,9 @@ def main():
         main_logger.info(f"Content: {generated.content}")
         main_logger.info(f"Takeaway: {generated.takeaway}")
 
-    #---------------------THREADS----------------------------
+    # ---------------------------------------------------------
+    # 5. PUBLISH TO THREADS
+    # ---------------------------------------------------------
     publisher = ThreadsPublisher()
 
     if not generated:
@@ -101,19 +127,15 @@ def main():
 
     main_logger.info(f"[THREADS] Thread Post IDs: {post_ids}") 
     
-    #--------------------FEEDBACK_ENGINE-------------------------
-    
-
-    storage = Storage(logger=get_logger("orbit.storage"))
-
+    # ---------------------------------------------------------
+    # 6. SAVE TO DATABASE (FEEDBACK ENGINE)
+    # ---------------------------------------------------------
     # Save post after publishing
     post_db_id = storage.save_post(generated, post_ids, best_trend)
 
-    #total time
+    # Total time
     total_time = time.time() - start_time
     main_logger.info(f"[PIPELINE] Total execution time: {total_time:.2f}s")
 
-
 if __name__ == "__main__":
     main()
-    
