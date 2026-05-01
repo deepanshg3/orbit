@@ -43,6 +43,18 @@ TASK:
 2. ALSO decide content_type ("short", "medium", or "thread").
 3. Make sure scores are unique decimal numbers (e.g., 9.8, 9.4).
 4. Select TOP 5 after scoring.
+
+=== OUTPUT SCHEMA (MANDATORY) ===
+You must return a JSON array containing exactly 5 objects. Each object MUST have the exact following keys:
+[
+  {{
+      "id": number,
+      "title": "exact title",
+      "score": number,
+      "content_type": "short | medium | thread",
+      "reason": "short explanation"
+  }}
+]
 """
 
 def build_ranker_user_message(trends: list) -> str:
