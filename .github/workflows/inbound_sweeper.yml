@@ -1,0 +1,38 @@
+name: Orbit Inbound Engine
+
+on:
+  schedule:
+    # Runs at minute 0 past every 6th hour (00:00, 06:00, 12:00, 18:00 UTC)
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+    # This allows you to manually click a "Run workflow" button in the GitHub UI for testing
+
+jobs:
+  run-sweeper:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip' # Speeds up the run by caching dependencies
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Execute Inbound Orchestrator
+        env:
+          # Injecting all your GitHub Secrets directly into the script's environment
+          THREADS_USERNAME: ${{ secrets.THREADS_USERNAME }}
+          THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          python3 -m core.interaction_engine.inbound.run_inbound

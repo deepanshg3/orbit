@@ -46,6 +46,7 @@ class Settings:
     # Threads
     THREADS_ACCESS_TOKEN = os.getenv("THREADS_ACCESS_TOKEN")
     THREADS_APP_SECRET = os.getenv("THREADS_APP_SECRET")
+    THREADS_USERNAME= "hard.truths_"
 
     #SupaBase
     SUPABASE_URL = os.getenv("SUPABASE_URL")

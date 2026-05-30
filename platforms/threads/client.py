@@ -1,6 +1,8 @@
 import os
 import requests
 from configs.settings import settings
+from core.utils.logger import get_logger
+        
 
 class ThreadsClient:
     BASE_URL = "https://graph.threads.net/v1.0"
@@ -36,3 +38,35 @@ class ThreadsClient:
             raise Exception(f"Threads API Error: {response.text}")
 
         return response.json()
+    
+    def get_replies(self, post_id: str) -> list:
+        import requests
+        from core.utils.logger import get_logger
+        
+        local_logger = get_logger("orbit.threads_api")
+        local_logger.info(f"[THREADS] Fetching replies for post: {post_id}")
+        
+        url = f"https://graph.threads.net/v1.0/{post_id}/replies"
+        
+        # CRITICAL: If you do not send this, Meta will NOT send the username back.
+        params = {
+            "fields": "id,text,username"
+        }
+        
+        headers = {
+            "Authorization": f"Bearer {self.access_token}"
+        }
+        
+        try:
+            response = requests.get(url, headers=headers, params=params)
+            
+            if response.status_code == 200:
+                data = response.json()
+                return data.get("data", [])
+            else:
+                local_logger.error(f"[THREADS ERROR] Failed to fetch replies for {post_id}: {response.text}")
+                return []
+                
+        except Exception as e:
+            local_logger.error(f"[THREADS ERROR] Network exception while getting replies: {str(e)}")
+            return []
