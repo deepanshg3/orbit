@@ -64,12 +64,10 @@ class InboundOrchestrator:
             self.logger.info(f"[ORCHESTRATOR] Publishing reply to @{username} on post {post_id}...")
             
             try:
-                # 1. Post to Meta API
-                # NOTE: Ensure your ThreadsClient has a publish_reply or post method 
-                # that accepts a text and the parent item's ID (comment_id or post_id)
-                response = self.threads_client.post(
+                # 1. Post to Meta API using the dedicated method
+                response = self.threads_client.publish_reply(
                     text=reply_text,
-                    parent_id=comment_id  # Replying directly to their comment container
+                    reply_to_id=comment_id
                 )
                 
                 if response:

@@ -3,7 +3,6 @@ import requests
 from configs.settings import settings
 from core.utils.logger import get_logger
         
-
 class ThreadsClient:
     BASE_URL = "https://graph.threads.net/v1.0"
 
@@ -40,9 +39,6 @@ class ThreadsClient:
         return response.json()
     
     def get_replies(self, post_id: str) -> list:
-        import requests
-        from core.utils.logger import get_logger
-        
         local_logger = get_logger("orbit.threads_api")
         local_logger.info(f"[THREADS] Fetching replies for post: {post_id}")
         
@@ -70,3 +66,41 @@ class ThreadsClient:
         except Exception as e:
             local_logger.error(f"[THREADS ERROR] Network exception while getting replies: {str(e)}")
             return []
+
+    def publish_reply(self, text: str, reply_to_id: str) -> dict:
+        """
+        Executes Meta's mandatory 2-step publishing process for a reply.
+        Step 1: Create the media container.
+        Step 2: Publish the container.
+        """
+        local_logger = get_logger("orbit.threads_api")
+        
+        # Step 1: Create Container
+        local_logger.info(f"[THREADS] Creating reply container for comment: {reply_to_id}")
+        container_payload = {
+            "media_type": "TEXT",
+            "text": text,
+            "reply_to_id": reply_to_id
+        }
+        
+        try:
+            # Utilizing your existing generic post wrapper
+            container_res = self.post("me/threads", data=container_payload)
+            container_id = container_res.get("id")
+            
+            if not container_id:
+                local_logger.error("[THREADS ERROR] Meta did not return a container ID.")
+                return None
+                
+            # Step 2: Publish Container
+            local_logger.info(f"[THREADS] Publishing container ID: {container_id}")
+            publish_payload = {
+                "creation_id": container_id
+            }
+            
+            publish_res = self.post("me/threads_publish", data=publish_payload)
+            return publish_res
+            
+        except Exception as e:
+            local_logger.error(f"[THREADS ERROR] Failed to publish reply: {str(e)}")
+            return None
