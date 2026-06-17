@@ -41,7 +41,7 @@ class Settings:
     
     #API key
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-    GEMINI_MODEL = "gemini-2.5-flash"
+    GEMINI_MODEL = "gemini-3.1-flash-lite"
 
     # Threads
     THREADS_ACCESS_TOKEN = os.getenv("THREADS_ACCESS_TOKEN")

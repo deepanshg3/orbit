@@ -78,33 +78,54 @@ class RankedTrendList(BaseModel):
     trends: List[RankedTrend]
 
 class StrategyPlaybookSchema(BaseModel):
+
     winning_topics: list[str] = Field(
         description="Macro-themes that performed well. e.g., ['Local LLMs', 'Hardware']"
     )
+
     losing_topics: list[str] = Field(
         description="Macro-themes that audiences ignored. e.g., ['AGI philosophy']"
     )
+
     winning_emotions: list[str] = Field(
         description="The tones that drove interaction. e.g., ['Contrarian', 'Empathetic']"
     )
+
     winning_formats: list[str] = Field(
         description="The structural formats that won. e.g., ['3-part bullet list']"
     )
-    optimal_length_range: str = Field(
-        description="The ideal character length of a post. e.g., '250-350 characters'"
+
+    preferred_content_type: str = Field(
+        description="Best performing content type. Must be one of: short, medium, thread."
     )
+
     winning_hook_mechanics: list[str] = Field(
         description="What made the first line work? e.g., ['Negative constraints']"
     )
+
     losing_hook_mechanics: list[str] = Field(
         description="What openings caused scrolling? e.g., ['Rhetorical questions']"
     )
+
     do_rules: list[str] = Field(
         description="3-5 absolute DOs for the daily generator next week."
     )
+
     dont_rules: list[str] = Field(
         description="3-5 absolute DONTs for the daily generator next week."
     )
+
     llm_analysis_summary: str = Field(
         description="A 2-3 sentence paragraph summarizing the overarching weekly strategy."
     )
+
+    @field_validator("preferred_content_type")
+    def validate_preferred_content_type(cls, v):
+        allowed = ["short", "medium", "thread"]
+
+        if v not in allowed:
+            raise ValueError(
+                f"preferred_content_type must be one of {allowed}"
+            )
+
+        return v

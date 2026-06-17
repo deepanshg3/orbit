@@ -25,7 +25,7 @@ class StrategyOrchestrator:
         self.logger.info(f"[ORCHESTRATOR] Fetching posts since {seven_days_ago.strftime('%Y-%m-%d')}")
         
         response = self.client.table("posts") \
-            .select("id, hook, content, takeaway, true_impact_score") \
+            .select("id, hook, content, takeaway, true_impact_score, content_type") \
             .gte("created_at", seven_days_ago.isoformat()) \
             .not_.is_("true_impact_score", "null") \
             .execute()
@@ -115,6 +115,7 @@ class StrategyOrchestrator:
         formatted = ""
         for i, p in enumerate(posts_list, 1):
             formatted += f"\n--- POST {i} (Impact Score: {p['true_impact_score']:.4f}) ---\n"
+            formatted += f"CONTENT_TYPE: {p.get('content_type')}\n"
             formatted += f"HOOK: {p.get('hook', '')}\n"
             formatted += f"CONTENT: {p.get('content', '')}\n"
             formatted += f"TAKEAWAY: {p.get('takeaway', '')}\n"
@@ -133,9 +134,9 @@ class StrategyOrchestrator:
             
             # Populate bucket specific JSON
             if bucket in ["2h", "1d", "3d"]:
-                totals[bucket]["views"] += row["views"]
-                totals[bucket]["likes"] += row["likes"]
-                totals[bucket]["replies"] += row["replies"]
-                totals[bucket]["reposts"] += row["reposts"]
+                totals[bucket]["views"] += row.get("views", 0) or 0
+                totals[bucket]["likes"] += row.get("likes", 0) or 0
+                totals[bucket]["replies"] += row.get("replies", 0) or 0
+                totals[bucket]["reposts"] += row.get("reposts", 0) or 0
                 
         return totals

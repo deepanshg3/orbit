@@ -13,7 +13,10 @@ def build_content_system_prompt(playbook: dict = None) -> str:
         do_rules = "\n- " + "\n- ".join(playbook.get("do_rules", ["Write with clarity."]))
         dont_rules = "\n- " + "\n- ".join(playbook.get("dont_rules", ["Avoid fluff and clickbait."]))
         winning_hooks = "\n- " + "\n- ".join(playbook.get("winning_hook_mechanics", ["Start with a strong, definitive statement."]))
-        optimal_length = playbook.get("optimal_length_range", "Adhere strictly to the content type limits below.")
+        preferred_content_type = playbook.get(
+        "preferred_content_type",
+        "thread"
+    )
     else:
         # Fallback if no playbook is passed
         logger.warning("[PROMPT BUILDER] No strategy playbook provided. Falling back to default baseline rules.")
@@ -21,7 +24,7 @@ def build_content_system_prompt(playbook: dict = None) -> str:
         do_rules = "\n- Provide technical or strategic insight.\n- Be useful for developers."
         dont_rules = "\n- Do not rewrite the news.\n- Avoid generic statements."
         winning_hooks = "\n- Start with a scroll-stopping opening line."
-        optimal_length = "Keep it concise but dense."
+        preferred_content_type = "thread"
 
     # 2. Return the master system prompt
     return f"""
@@ -41,24 +44,25 @@ You MUST adhere to these psychological and structural constraints:
 🪝 PROVEN HOOK MECHANICS (Use one of these structures for your first line):
 {winning_hooks}
 
-📏 OPTIMAL PACING TREND:
-{optimal_length}
-(Note: You must still strictly respect the hard character limits in the FORMAT RULES below).
+📊 BEST PERFORMING CONTENT TYPE LAST WEEK:
+{preferred_content_type}
+
+Use this as a soft preference when structuring the content.
 
 === FORMAT RULES (VERY IMPORTANT) ===
 IF the requested Content Type = "short":
 - Write ONLY 2–3 lines
-- Max 250 characters strictly
+- Max 200 characters strictly
 - No explanation, only punchy insight
 
 IF the requested Content Type = "medium":
-- Write a SINGLE post under 450 characters strictly
+- Write a SINGLE post under 400 characters strictly
 - Include insight but keep concise
 
 IF the requested Content Type = "thread":
 - Write structured multi-part content
 - Include breakdown, insights, and depth
-- Each part (chunk) must be strictly under 450 char
+- Each part (chunk) must be strictly under 350 char
 
 IMPORTANT:
 - DO NOT include numbering like "1/", "2/" for thread content

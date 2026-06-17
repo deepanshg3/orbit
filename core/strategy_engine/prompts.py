@@ -19,7 +19,7 @@ You MUST output your response as a valid JSON object matching the requested sche
 - `winning_topics` & `losing_topics`: Extract the macro-themes. (e.g., "Local LLMs" vs "AGI Philosophy").
 - `winning_emotions`: Identify the exact tone that drove engagement. Be specific (e.g., "Pragmatic Cynicism", "Vulnerable Struggle", "Authoritative Tutorial").
 - `winning_formats`: Look at the visual structure of the text. (e.g., "High-density code snippets", "Short one-liners", "3-part bullet lists").
-- `optimal_length_range`: Estimate the sweet spot for character count based on the winners. (e.g., "150-200 characters", "Long-form 500+ characters").
+- `preferred_content_type`: Determine which content type consistently performed best. Allowed values:- short, medium, thread
 - `winning_hook_mechanics`: Mathematically break down the first sentence of the winners. Did they use a negative constraint? A specific number? A bold claim?
 - `losing_hook_mechanics`: What opening structures caused the audience to scroll past? (e.g., "Rhetorical questions", "Vague hype words").
 - `do_rules`: Write 3-5 absolute, hard-coded rules the AI must follow when writing next week.
@@ -34,7 +34,7 @@ Return ONLY a raw, valid JSON object. Do not include markdown formatting like ``
   "losing_topics": ["Ignored theme 1", "Ignored theme 2"],
   "winning_emotions": ["Exact tone 1", "Exact tone 2"],
   "winning_formats": ["Visual structure 1", "Visual structure 2"],
-  "optimal_length_range": "e.g., 150-250 characters",
+  "preferred_content_type": "thread",
   "winning_hook_mechanics": ["Hook mechanic 1", "Hook mechanic 2"],
   "losing_hook_mechanics": ["Failed hook 1", "Failed hook 2"],
   "do_rules": ["Absolute rule 1", "Absolute rule 2", "Absolute rule 3"],
