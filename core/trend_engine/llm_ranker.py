@@ -1,19 +1,19 @@
-from google import genai
-from google.genai import types  # <-- REQUIRED FOR SYSTEM INSTRUCTIONS & JSON MODE
-from configs.settings import settings
-from core.utils.schema import RankedTrend
-
-# Adjust this import path if your file is in core/trend_engine/prompts.py instead!
-from core.trend_engine.prompt import build_ranker_system_prompt, build_ranker_user_message 
-
 import json
 import re
 import time
 import random
+from google import genai
+from google.genai import types 
+from configs.settings import settings
+from core.utils.schema import RankedTrend
+
+# --- NEW IMPORT ---
+from core.monitoring.tracing import trace_gemini_call
+from core.trend_engine.prompt import build_ranker_system_prompt, build_ranker_user_message 
 
 class LLMRanker:
     """
-    Uses Gemini (new SDK) to rank trends.
+    Uses Gemini (new SDK) to rank trends and traces decisions via LangSmith.
     """
 
     def __init__(self, logger):
@@ -46,66 +46,83 @@ class LLMRanker:
                 self.logger.info(f"[LLM] Attempt {attempt + 1}")
                 start_time = time.time()
 
-                # 2. The Modern SDK Call (Separated System vs Content)
-                response = self.client.models.generate_content(
-                    model=settings.GEMINI_MODEL,
-                    contents=user_message,
-                    config=types.GenerateContentConfig(
-                        system_instruction=system_instruction,
-                        response_mime_type="application/json", # Forces strict JSON
+                # --- LANGSMITH WRAPPER START ---
+                tags = ["trend_ranking", "hacker_news"]
+                meta = {
+                    "attempt": attempt + 1,
+                    "total_raw_trends_provided": len(trends),
+                    "playbook_guided": bool(playbook)
+                }
+                inputs_payload = {
+                    "system_instruction": system_instruction,
+                    "prompt_payload": user_message
+                }
+
+                with trace_gemini_call(name="Orbit Trend Ranking", inputs=inputs_payload, tags=tags, metadata=meta) as trace:
+                    
+                    # 2. The Modern SDK Call (Separated System vs Content)
+                    response = self.client.models.generate_content(
+                        model=settings.GEMINI_MODEL,
+                        contents=user_message,
+                        config=types.GenerateContentConfig(
+                            system_instruction=system_instruction,
+                            response_mime_type="application/json", 
+                        )
                     )
-                )
 
-                latency = time.time() - start_time
-                self.logger.info(f"[LLM] Latency: {latency:.2f}s")
+                    # Extract tokens directly into our LangSmith state
+                    trace.extract_usage(response)
 
-                raw_output = response.text
+                    latency = time.time() - start_time
+                    self.logger.info(f"[LLM] Latency: {latency:.2f}s")
 
-                # Token Sizes
-                usage = getattr(response, "usage_metadata", None)
-                if usage:
-                    input_tokens = getattr(usage, "prompt_token_count", 0)
-                    output_tokens = getattr(usage, "candidates_token_count", 0)
-                    total_tokens = getattr(usage, "total_token_count", 0)
-                
-                    self.logger.info(f"[LLM] Prompt Tokens: {input_tokens}")
-                    self.logger.info(f"[LLM] Completion Tokens: {output_tokens}")
-                    self.logger.info(f"[LLM] Total Tokens: {total_tokens}")
+                    raw_output = response.text
+                    
+                    # Log raw string immediately prior to local script parsing
+                    trace.outputs = {"raw_generated_ranking": raw_output}
 
-                self.logger.debug(f"[LLM] Raw response length: {len(raw_output)} chars")
+                    self.logger.info(f"[LLM] Prompt Tokens: {trace.prompt_tokens}")
+                    self.logger.info(f"[LLM] Completion Tokens: {trace.completion_tokens}")
+                    self.logger.info(f"[LLM] Total Tokens: {trace.total_tokens}")
 
-                cleaned_output = self.extract_json(raw_output)
-                self.logger.debug("[LLM] JSON extracted")
+                    self.logger.debug(f"[LLM] Raw response length: {len(raw_output)} chars")
 
-                parsed_output = json.loads(cleaned_output)
+                    cleaned_output = self.extract_json(raw_output)
+                    self.logger.debug("[LLM] JSON extracted")
 
-                # Structural validation
-                if not isinstance(parsed_output, list):
-                    raise ValueError("Output is not a list")
+                    parsed_output = json.loads(cleaned_output)
 
-                if len(parsed_output) != 5:
-                    raise ValueError("LLM did not return exactly top 5 trends")
+                    # Structural validation
+                    if not isinstance(parsed_output, list):
+                        raise ValueError("Output is not a list")
 
-                validated_output = []
-                for item in parsed_output:
-                    # Field validation
-                    if not all(k in item for k in ["id", "title", "score", "reason", "content_type"]):
-                        raise ValueError("Missing required fields")
+                    if len(parsed_output) != 5:
+                        raise ValueError("LLM did not return exactly top 5 trends")
 
-                    # ID validation
-                    if item["id"] not in valid_ids:
-                        raise ValueError(f"Invalid ID returned: {item['id']}")
+                    validated_output = []
+                    for item in parsed_output:
+                        # Field validation
+                        if not all(k in item for k in ["id", "title", "score", "reason", "content_type"]):
+                            raise ValueError("Missing required fields")
 
-                    # Pydantic validation
-                    validated = RankedTrend(**item)
-                    validated_output.append(validated)
+                        # ID validation
+                        if item["id"] not in valid_ids:
+                            raise ValueError(f"Invalid ID returned: {item['id']}")
 
-                self.logger.info(f"[LLM] Success on attempt {attempt + 1} (Playbook guided: {bool(playbook)})")
+                        # Pydantic validation
+                        validated = RankedTrend(**item)
+                        validated_output.append(validated)
 
-                # Optional: enforce correct ordering if LLM messes up
-                validated_output.sort(key=lambda x: x.score, reverse=True)
+                    self.logger.info(f"[LLM] Success on attempt {attempt + 1} (Playbook guided: {bool(playbook)})")
 
-                return validated_output
+                    # Optional: enforce correct ordering if LLM messes up
+                    validated_output.sort(key=lambda x: x.score, reverse=True)
+
+                    # Save cleanly structured dictionary outputs to LangSmith for easier reading
+                    trace.outputs["validated_ranked_trends"] = [t.model_dump() for t in validated_output]
+
+                    return validated_output
+                # --- LANGSMITH WRAPPER END ---
 
             except Exception as e:
                 failure_count += 1
@@ -130,5 +147,8 @@ class LLMRanker:
                         return None
                     
                     time.sleep(2)
+                    if execution_failed := True:
+                        # Let the context manager log the traceback and throw the exception forward
+                        raise e
                     
         return None

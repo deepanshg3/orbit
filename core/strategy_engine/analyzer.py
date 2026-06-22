@@ -7,12 +7,15 @@ from core.utils.schema import StrategyPlaybookSchema
 from core.strategy_engine.prompts import STRATEGY_SYSTEM_PROMPT
 from configs.settings import settings 
 
+# --- NEW IMPORT ---
+from core.monitoring.tracing import trace_gemini_call
+
 logger = get_logger("orbit.strategy_analyzer")
 
 class StrategyAnalyzer:
+
     def __init__(self):
         try:
-            # 1. Initialize Gemini with the NEW SDK syntax
             self.client = genai.Client(api_key=settings.GEMINI_API_KEY)
             logger.info("[ANALYZER] Gemini 2.5 Flash initialized successfully (Modern SDK).")
         except Exception as e:
@@ -39,33 +42,58 @@ class StrategyAnalyzer:
             try:
                 logger.info(f"[ANALYZER] Calling API (Attempt {attempt + 1}/{max_retries})...")
                 
-                # The New SDK call structure
-                response = self.client.models.generate_content(
-                    model=settings.GEMINI_MODEL,
-                    contents=user_message,
-                    config=types.GenerateContentConfig(
-                        system_instruction=STRATEGY_SYSTEM_PROMPT,
-                        response_mime_type="application/json",
+                # --- LANGSMITH WRAPPER START ---
+                tags = ["strategy_analysis", "weekly_epoch"]
+                meta = {
+                    "attempt": attempt + 1,
+                    # We can estimate the post count by counting the "ID:" blocks you likely append 
+                    "top_posts_count": top_posts_text.count("ID:"),
+                    "bottom_posts_count": bottom_posts_text.count("ID:")
+                }
+                inputs_payload = {
+                    "system_instruction": STRATEGY_SYSTEM_PROMPT,
+                    "prompt_payload": user_message
+                }
+
+                with trace_gemini_call(name="Orbit Weekly Strategy Analysis", inputs=inputs_payload, tags=tags, metadata=meta) as trace:
+                    
+                    response = self.client.models.generate_content(
+                        model=settings.GEMINI_MODEL,
+                        contents=user_message,
+                        config=types.GenerateContentConfig(
+                            system_instruction=STRATEGY_SYSTEM_PROMPT,
+                            response_mime_type="application/json",
+                        )
                     )
-                )
-                
-                raw_json_string = response.text
+                    
+                    # 1. Extract usage metadata
+                    trace.extract_usage(response)
 
-                # Parse the raw string into a Python dictionary
-                playbook_dict = json.loads(raw_json_string)
+                    raw_json_string = response.text
+                    
+                    # 2. Capture raw output before parsing
+                    trace.outputs = {"raw_generated_playbook": raw_json_string}
 
-                # Validate against the Pydantic Schema
-                validated_playbook = StrategyPlaybookSchema(**playbook_dict)
-                
-                logger.info("[ANALYZER] Playbook generated and validated successfully!")
-                return validated_playbook.model_dump()
+                    # Parse the raw string into a Python dictionary
+                    playbook_dict = json.loads(raw_json_string)
+
+                    # Validate against the Pydantic Schema
+                    validated_playbook = StrategyPlaybookSchema(**playbook_dict)
+                    
+                    # 3. Attach validated output
+                    final_playbook = validated_playbook.model_dump()
+                    trace.outputs["validated_playbook"] = final_playbook
+                    
+                    logger.info("[ANALYZER] Playbook generated and validated successfully!")
+                    return final_playbook
+                # --- LANGSMITH WRAPPER END ---
 
             except json.JSONDecodeError as e:
                 logger.error(f"[ANALYZER] Decode Error: Gemini returned invalid JSON -> {str(e)}")
             except Exception as e:
                 logger.error(f"[ANALYZER] Network/API Error -> {str(e)}")
             
-            # Exponential Backoff logic (Wait 2s, 4s, then abort)
+            # Exponential Backoff logic
             if attempt < max_retries - 1:
                 sleep_time = base_delay * (2 ** attempt)
                 logger.warning(f"[ANALYZER] Retrying in {sleep_time} seconds...")

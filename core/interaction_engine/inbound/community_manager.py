@@ -5,6 +5,9 @@ from google.genai import types
 from configs.settings import settings
 from core.utils.logger import get_logger
 
+# --- NEW IMPORT ---
+from core.monitoring.tracing import trace_gemini_call
+
 logger = get_logger("orbit.inbound.community_manager")
 
 class CommunityManager:
@@ -13,7 +16,7 @@ class CommunityManager:
         Initializes the Community Manager with the modern Gemini API client.
         """
         self.client = genai.Client(api_key=settings.GEMINI_API_KEY)
-        self.logger = logger  # <--- CRITICAL FIX: The missing logger!
+        self.logger = logger 
 
     def _build_system_instruction(self) -> str:
         """
@@ -41,6 +44,7 @@ class CommunityManager:
 
         self.logger.info(f"[COMMUNITY MANAGER] Compiling responses for {len(unanswered_queue)} comments in batch...")
 
+        system_instruction = self._build_system_instruction()
         prompt = (
             "Analyze the parent post context and the corresponding user comments below. "
             "Generate an authentic, tailored response for each user comment following your core persona.\n\n"
@@ -71,35 +75,58 @@ class CommunityManager:
             try:
                 self.logger.debug(f"[COMMUNITY MANAGER] LLM Generation Attempt {attempt + 1}/{max_retries}...")
                 
-                response = self.client.models.generate_content(
-                    model=settings.GEMINI_MODEL,
-                    contents=prompt,
-                    config=types.GenerateContentConfig(
-                        system_instruction=self._build_system_instruction(),
-                        response_mime_type="application/json",
-                        temperature=0.7
-                    )
-                )
+                # --- LANGSMITH WRAPPER START ---
+                tags = ["inbound_reply", "socratic_engagement"]
+                meta = {
+                    "batch_size": len(unanswered_queue),
+                    "attempt": attempt + 1
+                }
+                inputs_payload = {
+                    "system_instruction": system_instruction,
+                    "prompt_payload": prompt
+                }
 
-                raw_text = response.text.replace("```json", "").replace("```", "").strip()
-                generated_batch = json.loads(raw_text)
-
-                validated_replies = []
-                
-                for reply in generated_batch:
-                    comment_id = reply.get("comment_id")
-                    original_item = next((i for i in unanswered_queue if i["comment_id"] == comment_id), None)
+                with trace_gemini_call(name="Orbit Inbound Reply Generation", inputs=inputs_payload, tags=tags, metadata=meta) as trace:
                     
-                    if original_item:
-                        validated_replies.append({
-                            "post_id": original_item["post_id"],
-                            "comment_id": comment_id,
-                            "username": reply.get("username"),
-                            "reply_text": reply.get("reply_text")
-                        })
+                    response = self.client.models.generate_content(
+                        model=settings.GEMINI_MODEL,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            system_instruction=system_instruction,
+                            response_mime_type="application/json",
+                            temperature=0.7
+                        )
+                    )
 
-                self.logger.info(f"[COMMUNITY MANAGER] Successfully generated {len(validated_replies)} valid replies.")
-                return validated_replies
+                    # Extract usage metadata using our robust helper
+                    trace.extract_usage(response)
+
+                    raw_text = response.text.replace("```json", "").replace("```", "").strip()
+                    
+                    # Capture the raw text string before parsing logic can fail
+                    trace.outputs = {"raw_generated_replies": raw_text}
+
+                    generated_batch = json.loads(raw_text)
+                    validated_replies = []
+                    
+                    for reply in generated_batch:
+                        comment_id = reply.get("comment_id")
+                        original_item = next((i for i in unanswered_queue if i["comment_id"] == comment_id), None)
+                        
+                        if original_item:
+                            validated_replies.append({
+                                "post_id": original_item["post_id"],
+                                "comment_id": comment_id,
+                                "username": reply.get("username"),
+                                "reply_text": reply.get("reply_text")
+                            })
+
+                    # Add structured validation results back to LangSmith dashboard
+                    trace.outputs["validated_replies"] = validated_replies
+
+                    self.logger.info(f"[COMMUNITY MANAGER] Successfully generated {len(validated_replies)} valid replies.")
+                    return validated_replies
+                # --- LANGSMITH WRAPPER END ---
 
             except json.JSONDecodeError as je:
                 self.logger.error(f"[COMMUNITY MANAGER ERROR] LLM failed to output pure JSON string: {je}")
@@ -118,6 +145,7 @@ class CommunityManager:
                         return []
                 else:
                     self.logger.error(f"[COMMUNITY MANAGER ERROR] Unhandled Exception: {e}")
-                    return []
+                    # Re-raising ensures the tracing context manager marks the trace red
+                    raise e
                     
         return []
