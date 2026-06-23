@@ -28,4 +28,8 @@ jobs:
           THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          # LangSmith Observability Configuration (Ensures telemetry uniformity)
+          LANGCHAIN_API_KEY: ${{ secrets.LANGCHAIN_API_KEY }}
+          LANGCHAIN_PROJECT: "orbit-production"
+          LANGCHAIN_TRACING_V2: "true"
         run: python -m core.analytics_engine.fetch_metrics

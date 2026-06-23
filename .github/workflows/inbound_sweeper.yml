@@ -34,5 +34,9 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          # LangSmith Observability Configuration
+          LANGCHAIN_API_KEY: ${{ secrets.LANGCHAIN_API_KEY }}
+          LANGCHAIN_PROJECT: "orbit-production"
+          LANGCHAIN_TRACING_V2: "true"
         run: |
           python3 -m core.interaction_engine.inbound.run_inbound

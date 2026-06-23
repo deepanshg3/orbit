@@ -32,6 +32,10 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          # LangSmith Observability Configuration
+          LANGCHAIN_API_KEY: ${{ secrets.LANGCHAIN_API_KEY }}
+          LANGCHAIN_PROJECT: "orbit-production"
+          LANGCHAIN_TRACING_V2: "true"
         run: |
           # Running as a module, exactly as we tested!
           python -m core.strategy_engine.run_strategy
