@@ -3,8 +3,11 @@ import traceback
 from contextlib import contextmanager
 from langsmith import Client
 
-# Initialize the LangSmith client once globally to save connection overhead
-ls_client = Client()
+# Safely initialize client to prevent crashes if environment keys are missing entirely
+try:
+    ls_client = Client()
+except Exception:
+    ls_client = None
 
 class GeminiTraceState:
     """
@@ -35,72 +38,77 @@ class GeminiTraceState:
 @contextmanager
 def trace_gemini_call(name: str, inputs: dict, tags: list[str] = None, metadata: dict = None):
     """
-    Orbit Universal LLM Tracing - Expert Level
-
-    Args:
-        name: Name of the trace (e.g., 'Trend Ranking', 'Content Generation')
-        inputs: Dictionary of what went into the prompt (system, user, context)
-        tags: Taxonomy tags for LangSmith filtering (e.g., ['strategy', 'weekly'])
-        metadata: Explicit tracking vars (e.g., {'epoch_id': 5, 'content_type': 'thread'})
+    Orbit Universal LLM Tracing - Fully Guarded Fault-Tolerant Version.
+    Guarantees that a missing, failed, or NoneType run object never crashes the core pipeline.
     """
-    
-    # 1. Initialize the run in LangSmith
-    run = ls_client.create_run(
-        name=name,
-        run_type="llm",
-        inputs=inputs,
-        tags=tags or [],
-        extra={"metadata": metadata or {}}
-    )
-
+    run = None
     state = GeminiTraceState()
     start_time = time.time()
 
+    # 1. Attempt to log the run initiation, catch initialization bugs cleanly
+    if ls_client:
+        try:
+            run = ls_client.create_run(
+                name=name,
+                run_type="llm",
+                inputs=inputs,
+                tags=tags or [],
+                extra={"metadata": metadata or {}}
+            )
+        except Exception as e:
+            print(f"[TRACKING WARNING] Failed to initialize LangSmith trace: {str(e)}")
+            run = None # Explicitly ensure it stays None if the call itself fails
+
     try:
-        # Yield control back to your Orbit engines (Generator, Community Manager, etc.)
+        # Yield control back to Orbit's engine
         yield state
         
-        # 2. If execution reaches here, the LLM call and JSON parsing were successful
-        end_time = time.time()
-        
-        # LangSmith natively parses a "usage" dict inside outputs for token graphs
-        if "usage" not in state.outputs:
-            state.outputs["usage"] = {
-                "prompt_tokens": state.prompt_tokens,
-                "completion_tokens": state.completion_tokens,
-                "total_tokens": state.total_tokens
-            }
-
-        ls_client.update_run(
-            run.id,
-            outputs=state.outputs,
-            end_time=end_time,
-            extra={
-                "metadata": {
-                    **(metadata or {}),
-                    "latency_seconds": round(end_time - start_time, 2)
+        # 2. Guarded Run Completion Check
+        if ls_client and run is not None:
+            end_time = time.time()
+            if "usage" not in state.outputs:
+                state.outputs["usage"] = {
+                    "prompt_tokens": state.prompt_tokens,
+                    "completion_tokens": state.completion_tokens,
+                    "total_tokens": state.total_tokens
                 }
-            }
-        )
+
+            try:
+                ls_client.update_run(
+                    run.id,
+                    outputs=state.outputs,
+                    end_time=end_time,
+                    extra={
+                        "metadata": {
+                            **(metadata or {}),
+                            "latency_seconds": round(end_time - start_time, 2)
+                        }
+                    }
+                )
+            except Exception as e:
+                print(f"[TRACKING WARNING] Failed to update active LangSmith trace: {str(e)}")
 
     except Exception as e:
-        # 3. If Gemini 503s OR your JSON parsing fails, catch it and flag the trace RED
-        end_time = time.time()
-        error_stack = traceback.format_exc()
+        # 3. Guarded Run Failure Catch
+        if ls_client and run is not None:
+            try:
+                end_time = time.time()
+                error_stack = traceback.format_exc()
+                ls_client.update_run(
+                    run.id,
+                    error=str(e),
+                    outputs={"traceback": error_stack},
+                    end_time=end_time,
+                    extra={
+                        "metadata": {
+                            **(metadata or {}),
+                            "latency_seconds": round(end_time - start_time, 2),
+                            "status": "failed"
+                        }
+                    }
+                )
+            except Exception:
+                pass
         
-        ls_client.update_run(
-            run.id,
-            error=str(e),
-            outputs={"traceback": error_stack}, # Puts the raw Python error directly in the LangSmith UI
-            end_time=end_time,
-            extra={
-                "metadata": {
-                    **(metadata or {}),
-                    "latency_seconds": round(end_time - start_time, 2),
-                    "status": "failed"
-                }
-            }
-        )
-        
-        # Re-raise the exception so your Exponential Backoff logic can still catch it!
-        raise
+        # Always bubble up the actual core LLM exception so Orbit can handle retries natively
+        raise e
