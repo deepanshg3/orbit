@@ -4,6 +4,9 @@ from core.analytics_engine.storage import Storage
 from core.analytics_engine.calculator import ImpactCalculator
 from core.strategy_engine.orchestrator import StrategyOrchestrator
 
+# --- NEW IMPORT ---
+from core.monitoring.tracing import flush_traces
+
 # Initialize the master logger for the Sunday Pipeline
 logger = get_logger("orbit.sunday_strategy")
 
@@ -43,6 +46,14 @@ def main():
         # Catch any fatal errors so the cron job fails gracefully
         logger.error(f"❌ CRITICAL PIPELINE FAILURE: {str(e)}")
         sys.exit(1)
+        
+    finally:
+        # ---------------------------------------------------------
+        # PHASE 3: OBSERVABILITY FLUSH (DO NOT REMOVE)
+        # ---------------------------------------------------------
+        logger.info("Holding process to flush LangSmith telemetry...")
+        flush_traces()
+        logger.info("Strategy execution complete. Terminating.")
 
 if __name__ == "__main__":
     main()

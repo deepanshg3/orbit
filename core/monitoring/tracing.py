@@ -112,3 +112,16 @@ def trace_gemini_call(name: str, inputs: dict, tags: list[str] = None, metadata:
         
         # Always bubble up the actual core LLM exception so Orbit can handle retries natively
         raise e
+
+def flush_traces():
+    """
+    Blocks execution and forces the GitHub Actions server to wait 
+    until LangSmith confirms all background tracking packets are sent.
+    """
+    if ls_client:
+        try:
+            print("[TRACKING] Holding server process to flush pending LangSmith traces...")
+            ls_client.flush()
+            print("[TRACKING] Flush complete. All telemetry secured.")
+        except Exception as e:
+            print(f"[TRACKING WARNING] Failed to flush traces safely: {str(e)}")
