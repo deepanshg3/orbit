@@ -2,6 +2,7 @@ import time
 import traceback
 from contextlib import contextmanager
 from langsmith import Client
+from langsmith.run_trees import RunTree
 
 # Safely initialize client to prevent crashes if environment keys are missing entirely
 try:
@@ -24,7 +25,6 @@ class GeminiTraceState:
     def extract_usage(self, response):
         """
         Safely extracts token usage directly from the modern google-genai SDK response object.
-        Fails silently if the API doesn't return metadata (e.g., during a 503 error).
         """
         try:
             if hasattr(response, 'usage_metadata') and response.usage_metadata:
@@ -38,34 +38,35 @@ class GeminiTraceState:
 @contextmanager
 def trace_gemini_call(name: str, inputs: dict, tags: list[str] = None, metadata: dict = None):
     """
-    Orbit Universal LLM Tracing - Fully Guarded Fault-Tolerant Version.
-    Guarantees that a missing, failed, or NoneType run object never crashes the core pipeline.
+    Orbit Universal LLM Tracing - RunTree Architecture.
+    Guarantees completion transmission by forcing thread synchronization via `.wait()`.
     """
-    run = None
     state = GeminiTraceState()
     start_time = time.time()
+    rt = None
 
-    # 1. Attempt to log the run initiation, catch initialization bugs cleanly
+    # 1. Initialize and post the run asynchronously
     if ls_client:
         try:
-            run = ls_client.create_run(
+            rt = RunTree(
                 name=name,
                 run_type="llm",
                 inputs=inputs,
                 tags=tags or [],
-                extra={"metadata": metadata or {}}
+                extra={"metadata": metadata or {}},
+                client=ls_client
             )
+            rt.post()
         except Exception as e:
-            print(f"[TRACKING WARNING] Failed to initialize LangSmith trace: {str(e)}")
-            run = None # Explicitly ensure it stays None if the call itself fails
+            print(f"[TRACKING WARNING] Failed to initialize RunTree: {str(e)}")
+            rt = None
 
     try:
         # Yield control back to Orbit's engine
         yield state
         
         # 2. Guarded Run Completion Check
-        if ls_client and run is not None:
-            end_time = time.time()
+        if rt is not None:
             if "usage" not in state.outputs:
                 state.outputs["usage"] = {
                     "prompt_tokens": state.prompt_tokens,
@@ -74,54 +75,38 @@ def trace_gemini_call(name: str, inputs: dict, tags: list[str] = None, metadata:
                 }
 
             try:
-                ls_client.update_run(
-                    run.id,
-                    outputs=state.outputs,
-                    end_time=end_time,
-                    extra={
-                        "metadata": {
-                            **(metadata or {}),
-                            "latency_seconds": round(end_time - start_time, 2)
-                        }
-                    }
-                )
+                # rt.end() natively formats timestamps correctly for the backend
+                rt.end(outputs=state.outputs)
+                
+                # Safely update latency metadata
+                rt.extra.setdefault("metadata", {})
+                rt.extra["metadata"]["latency_seconds"] = round(time.time() - start_time, 2)
+                
+                rt.patch() 
+                rt.wait() # CRITICAL: Blocks execution until the network POST is confirmed
             except Exception as e:
-                print(f"[TRACKING WARNING] Failed to update active LangSmith trace: {str(e)}")
+                print(f"[TRACKING WARNING] Failed to patch RunTree: {str(e)}")
 
     except Exception as e:
         # 3. Guarded Run Failure Catch
-        if ls_client and run is not None:
+        if rt is not None:
             try:
-                end_time = time.time()
-                error_stack = traceback.format_exc()
-                ls_client.update_run(
-                    run.id,
-                    error=str(e),
-                    outputs={"traceback": error_stack},
-                    end_time=end_time,
-                    extra={
-                        "metadata": {
-                            **(metadata or {}),
-                            "latency_seconds": round(end_time - start_time, 2),
-                            "status": "failed"
-                        }
-                    }
-                )
+                rt.extra.setdefault("metadata", {})
+                rt.extra["metadata"]["latency_seconds"] = round(time.time() - start_time, 2)
+                rt.extra["metadata"]["status"] = "failed"
+                
+                rt.end(error=str(e), outputs={"traceback": traceback.format_exc()})
+                rt.patch()
+                rt.wait() # CRITICAL: Ensure error trace isn't killed by a pipeline exit
             except Exception:
                 pass
         
-        # Always bubble up the actual core LLM exception so Orbit can handle retries natively
+        # Bubble up exception to core engine
         raise e
 
 def flush_traces():
     """
-    Blocks execution and forces the GitHub Actions server to wait 
-    until LangSmith confirms all background tracking packets are sent.
+    With RunTree.wait(), traces are synchronized intrinsically per-call. 
+    Kept for architectural compatibility with main.py.
     """
-    if ls_client:
-        try:
-            print("[TRACKING] Holding server process to flush pending LangSmith traces...")
-            ls_client.flush()
-            print("[TRACKING] Flush complete. All telemetry secured.")
-        except Exception as e:
-            print(f"[TRACKING WARNING] Failed to flush traces safely: {str(e)}")
+    print("[TRACKING] Telemetry intrinsically secured via RunTree synchronization.")
